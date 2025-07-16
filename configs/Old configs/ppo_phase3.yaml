@@ -1,0 +1,13 @@
+# Phase-3 fine-tuning overrides
+# Start from best Phase-2 checkpoint and use even smaller LR
+resume_model_path: models/winrate_best_model.zip
+
+# Optimiser params – very small updates, moderate exploration
+learning_rate: 1.5e-5
+ent_coef: 0.015
+target_kl: 0.05
+
+# Training schedule
+total_timesteps: 800000  # 0.8 M
+n_envs: 8
+eval_freq: 20000 

@@ -1,0 +1,24 @@
+resume_model_path: models/best_model.zip
+# Train up to 400 k extra steps (stop earlier if no new best win-rate for 200k)
+total_timesteps: 800000
+
+# PPO hyper-parameters for fine-tune
+learning_rate: 5e-6
+clip_range: 0.15
+n_steps: 1024              # shorter rollouts improve on-policy fit
+batch_size: 32
+n_epochs: 12
+
+gamma: 0.99
+gae_lambda: 0.95
+ent_coef: 0.01
+vf_coef: 0.5
+max_grad_norm: 0.5
+target_kl: 0.03
+
+# Vectorised envs & evaluation schedule
+n_envs: 8
+
+# Callbacks (the script's defaults)
+# Win-rate + reward eval every 40k steps (30 episodes)
+eval_freq: 40000 

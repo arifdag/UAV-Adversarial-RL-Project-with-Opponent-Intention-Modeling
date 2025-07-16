@@ -18,7 +18,11 @@ from gym_pybullet_drones.utils.enums import DroneModel, Physics, ImageType
 class BaseAviary(gym.Env):
     """Base class for "drone aviary" Gym environments."""
 
-    # metadata = {'render.modes': ['human']}
+    # Extended metadata to advertise rgb_array rendering for Gymnasium wrappers
+    metadata = {
+        'render_modes': ['human', 'rgb_array'],
+        'render_fps': 30,
+    }
     
     ################################################################################
 
@@ -384,32 +388,102 @@ class BaseAviary(gym.Env):
     
     ################################################################################
     
-    def render(self,
-               mode='human',
-               close=False
-               ):
-        """Prints a textual output of the environment.
+    def render(self, mode: str = 'human', close: bool = False):
+        """Render the scene or return an RGB array.
 
-        Parameters
-        ----------
-        mode : str, optional
-            Unused.
-        close : bool, optional
-            Unused.
-
+        * ``mode == 'human'``: fall back to the original textual debug printout.
+        * ``mode == 'rgb_array'``: capture the current PyBullet camera view and
+          return it as a ``np.ndarray`` compatible with Gymnasium's
+          :pyclass:`RecordVideo` wrapper.
         """
+
+        # ------------------------------------------------------------------
+        # RGB-array rendering for video recording
+        # ------------------------------------------------------------------
+        if mode == 'rgb_array':
+            # Lazily set default camera parameters if they were not created
+            if not hasattr(self, 'VID_WIDTH'):
+                self.VID_WIDTH = 640  # type: ignore[attr-defined]
+                self.VID_HEIGHT = 480  # type: ignore[attr-defined]
+
+            # Default camera configuration (same as DIRECT mode path)
+            view_mat = getattr(self, 'CAM_VIEW', None)
+            proj_mat = getattr(self, 'CAM_PRO', None)
+
+            if view_mat is None or proj_mat is None:
+                view_mat = p.computeViewMatrixFromYawPitchRoll(
+                    distance=3,
+                    yaw=-30,
+                    pitch=-30,
+                    roll=0,
+                    cameraTargetPosition=[0, 0, 0],
+                    upAxisIndex=2,
+                    physicsClientId=self.CLIENT,
+                )
+                proj_mat = p.computeProjectionMatrixFOV(
+                    fov=60.0,
+                    aspect=float(self.VID_WIDTH) / float(self.VID_HEIGHT),
+                    nearVal=0.1,
+                    farVal=1000.0,
+                )
+
+            w, h, rgba, *_ = p.getCameraImage(
+                width=self.VID_WIDTH,
+                height=self.VID_HEIGHT,
+                viewMatrix=view_mat,
+                projectionMatrix=proj_mat,
+                renderer=p.ER_TINY_RENDERER,
+                physicsClientId=self.CLIENT,
+            )
+
+            frame = np.reshape(rgba, (h, w, 4))  # RGBA
+            return frame[:, :, :3]  # drop alpha for compatibility
+
+        # ------------------------------------------------------------------
+        # Human/text rendering (legacy behaviour)
+        # ------------------------------------------------------------------
         if self.first_render_call and not self.GUI:
-            print("[WARNING] BaseAviary.render() is implemented as text-only, re-initialize the environment using Aviary(gui=True) to use PyBullet's graphical interface")
+            print(
+                "[WARNING] BaseAviary.render() is implemented as text-only, "
+                "re-initialize the environment using Aviary(gui=True) to use "
+                "PyBullet's graphical interface",
+            )
             self.first_render_call = False
-        print("\n[INFO] BaseAviary.render() ——— it {:04d}".format(self.step_counter),
-              "——— wall-clock time {:.1f}s,".format(time.time()-self.RESET_TIME),
-              "simulation time {:.1f}s@{:d}Hz ({:.2f}x)".format(self.step_counter*self.PYB_TIMESTEP, self.PYB_FREQ, (self.step_counter*self.PYB_TIMESTEP)/(time.time()-self.RESET_TIME)))
-        for i in range (self.NUM_DRONES):
-            print("[INFO] BaseAviary.render() ——— drone {:d}".format(i),
-                  "——— x {:+06.2f}, y {:+06.2f}, z {:+06.2f}".format(self.pos[i, 0], self.pos[i, 1], self.pos[i, 2]),
-                  "——— velocity {:+06.2f}, {:+06.2f}, {:+06.2f}".format(self.vel[i, 0], self.vel[i, 1], self.vel[i, 2]),
-                  "——— roll {:+06.2f}, pitch {:+06.2f}, yaw {:+06.2f}".format(self.rpy[i, 0]*self.RAD2DEG, self.rpy[i, 1]*self.RAD2DEG, self.rpy[i, 2]*self.RAD2DEG),
-                  "——— angular velocity {:+06.4f}, {:+06.4f}, {:+06.4f} ——— ".format(self.ang_v[i, 0], self.ang_v[i, 1], self.ang_v[i, 2]))
+
+        print(
+            "\n[INFO] BaseAviary.render() ——— it {:04d}".format(self.step_counter),
+            "——— wall-clock time {:.1f}s,".format(time.time() - self.RESET_TIME),
+            "simulation time {:.1f}s@{:d}Hz ({:.2f}x)".format(
+                self.step_counter * self.PYB_TIMESTEP,
+                self.PYB_FREQ,
+                (self.step_counter * self.PYB_TIMESTEP) / (time.time() - self.RESET_TIME),
+            ),
+        )
+
+        for i in range(self.NUM_DRONES):
+            print(
+                "[INFO] BaseAviary.render() ——— drone {:d}".format(i),
+                "——— x {:+06.2f}, y {:+06.2f}, z {:+06.2f}".format(
+                    self.pos[i, 0],
+                    self.pos[i, 1],
+                    self.pos[i, 2],
+                ),
+                "——— velocity {:+06.2f}, {:+06.2f}, {:+06.2f}".format(
+                    self.vel[i, 0],
+                    self.vel[i, 1],
+                    self.vel[i, 2],
+                ),
+                "——— roll {:+06.2f}, pitch {:+06.2f}, yaw {:+06.2f}".format(
+                    self.rpy[i, 0] * self.RAD2DEG,
+                    self.rpy[i, 1] * self.RAD2DEG,
+                    self.rpy[i, 2] * self.RAD2DEG,
+                ),
+                "——— angular velocity {:+06.4f}, {:+06.4f}, {:+06.4f} ——— ".format(
+                    self.ang_v[i, 0],
+                    self.ang_v[i, 1],
+                    self.ang_v[i, 2],
+                ),
+            )
     
     ################################################################################
 
