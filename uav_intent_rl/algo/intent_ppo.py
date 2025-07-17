@@ -138,35 +138,49 @@ class IntentPPO(PPO):
         policy: str | type[IntentPPOPolicy] = IntentPPOPolicy,
         env: GymEnv | str | None = None,
         aux_loss_coef: float = 0.1,
+        aux_loss_coef_min: float = 0.0,
         use_balanced_loss: bool = False,
         lambda_schedule: str = "constant",
         lambda_warmup_steps: int = 0,
+        freeze_feature_steps: int = 0,
         total_timesteps: int = 1_000_000,
         **kwargs: Any,
     ) -> None:
         self.aux_loss_coef_max = float(aux_loss_coef)
+        self.aux_loss_coef_min = float(aux_loss_coef_min)
         self.lambda_schedule = lambda_schedule
         self.lambda_warmup_steps = int(lambda_warmup_steps)
         self.total_timesteps = int(total_timesteps)
-        self.aux_loss_coef = 0.0 if lambda_schedule != "constant" else float(aux_loss_coef)
+        self.freeze_feature_steps = int(freeze_feature_steps)
+        self.aux_loss_coef = (
+            self.aux_loss_coef_min if lambda_schedule != "constant" else float(aux_loss_coef)
+        )
         self.use_balanced_loss = bool(use_balanced_loss)
         # Force use of our custom buffer
         kwargs.setdefault("rollout_buffer_class", RolloutBufferWithOpp)
         super().__init__(policy, env, **kwargs)
 
     def _compute_lambda(self):
+        """Compute current λ according to selected schedule."""
         if self.lambda_schedule == "constant":
             return self.aux_loss_coef_max
-        # Progress: 0 to 1 over warmup steps, then hold
+
+        # Progress: 0 → 1 over warm-up steps (clipped)
         progress = min(self.num_timesteps / max(1, self.lambda_warmup_steps), 1.0)
+
+        # Helper to interpolate between min and max
+        def _interp(factor: float) -> float:  # 0 ≤ factor ≤ 1
+            return self.aux_loss_coef_min + (self.aux_loss_coef_max - self.aux_loss_coef_min) * factor
+
         if self.lambda_schedule == "cosine":
-            # Cosine ramp from 0 to max
             import math
-            return self.aux_loss_coef_max * 0.5 * (1 - math.cos(math.pi * progress))
+            return _interp(0.5 * (1 - math.cos(math.pi * progress)))
         elif self.lambda_schedule == "linear":
-            return self.aux_loss_coef_max * progress
-        else:
-            return self.aux_loss_coef_max
+            return _interp(progress)
+        elif self.lambda_schedule == "step":
+            return self.aux_loss_coef_min if progress < 1.0 else self.aux_loss_coef_max
+        # Fallback – treat as constant
+        return self.aux_loss_coef_max
 
     # ------------------------------------------------------------------
     # Override collect_rollouts to capture opponent bucket
@@ -257,6 +271,21 @@ class IntentPPO(PPO):
     def train(self) -> None:  # noqa: D401, C901 – mirrors PPO.train
         # Switch to train mode
         self.policy.set_training_mode(True)
+
+        # ------------------------------------------------------------------
+        # Optionally freeze feature extractor / shared MLP for early updates
+        # ------------------------------------------------------------------
+        if self.freeze_feature_steps > 0:
+            freeze_now = self.num_timesteps < self.freeze_feature_steps
+            if freeze_now != getattr(self, "_features_frozen", False):
+                for module_name in ["features_extractor", "mlp_extractor"]:
+                    module = getattr(self.policy, module_name, None)
+                    if module is None:
+                        continue
+                    for param in module.parameters():
+                        param.requires_grad = not freeze_now
+                self._features_frozen = freeze_now
+
         self._update_learning_rate(self.policy.optimizer)
 
         # Update lambda (aux_loss_coef) based on scheduler
@@ -373,4 +402,6 @@ class IntentPPO(PPO):
         self.logger.record("train/clip_fraction", safe_mean(clip_fractions))
         self.logger.record("train/loss", loss.item())
         self.logger.record("train/explained_variance", explained_var)
-        self.logger.record("train/aux_coef", self.aux_loss_coef) 
+        self.logger.record("train/aux_coef", self.aux_loss_coef)
+        if self.freeze_feature_steps > 0:
+            self.logger.record("train/features_frozen", int(getattr(self, "_features_frozen", False))) 

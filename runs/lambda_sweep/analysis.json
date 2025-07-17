@@ -1,0 +1,12 @@
+{
+  "best_lambda": 0.1,
+  "best_accuracy": 0.0,
+  "best_dod_lambda": 0.1,
+  "best_dod_rate": 0.0,
+  "recommendations": [
+    "\u2717 DoD requirement not met. Best accuracy: 0.000",
+    "Consider extending training time or adjusting architecture",
+    "Lower \u03bb values appear beneficial"
+  ],
+  "dod_requirement_met": false
+}

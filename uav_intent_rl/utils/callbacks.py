@@ -153,12 +153,21 @@ class WinRateCallback(BaseCallback):  # noqa: D101 – mirrors AuxAccuracy struc
         *,
         n_eval_episodes: int = 20,
         eval_freq: int = 20_000,
+        deterministic: bool = True,
+        best_model_save_path: str | Path | None = None,
+        best_model_name: str = "best_winrate",
         verbose: int = 0,
     ) -> None:
         super().__init__(verbose=verbose)
         self.eval_env = eval_env
         self.n_eval_episodes = int(n_eval_episodes)
         self.eval_freq = int(eval_freq)
+        self.deterministic = bool(deterministic)
+        self.best_model_save_path = Path(best_model_save_path) if best_model_save_path else None
+        self.best_model_name = str(best_model_name)
+        self.best_win_rate: float = -np.inf
+        if self.best_model_save_path is not None:
+            self.best_model_save_path.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------
     # Core helper – determine win-rate
@@ -211,4 +220,13 @@ class WinRateCallback(BaseCallback):  # noqa: D101 – mirrors AuxAccuracy struc
         self.logger.record("eval/win_rate", win_rate)
         if self.verbose:
             print(f"Eval win-rate: {win_rate*100:.1f} %")
+
+        # Save if best so far
+        if win_rate > self.best_win_rate and self.best_model_save_path is not None:
+            self.best_win_rate = win_rate
+            file_path = self.best_model_save_path / f"{self.best_model_name}.zip"
+            self.model.save(file_path)  # type: ignore[arg-type]
+            if self.verbose >= 1:
+                print(f"New best win-rate ({win_rate:.3f}) ⇒ saved model to {file_path}")
+
         return True 

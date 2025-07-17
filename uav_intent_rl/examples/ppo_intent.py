@@ -41,9 +41,23 @@ def _make_env(n_envs: int = 8, *, gui: bool = False):
 # Training routine
 # -----------------------------------------------------------------------------
 
-def train_single(total_timesteps: int, aux_coef: float, gui: bool = False, resume: str = None, learning_rate: float = None, lambda_schedule: str = "constant", lambda_warmup_steps: int = 0) -> None:  # noqa: D401
-    env = _make_env(gui=gui)
-    eval_env = _make_env(gui=False)
+def train_single(
+    total_timesteps: int,
+    aux_coef: float,
+    gui: bool = False,
+    resume: str | None = None,
+    learning_rate: float | None = None,
+    lambda_schedule: str = "constant",
+    lambda_warmup_steps: int = 0,
+    lambda_min: float = 0.0,
+    freeze_feature_steps: int = 0,
+    n_envs: int = 8,
+    ent_coef: float = 0.01,
+    clip_range: float = 0.2,
+    balanced_loss: bool = False,
+) -> None:  # noqa: D401
+    env = _make_env(n_envs=n_envs, gui=gui)
+    eval_env = _make_env(n_envs=n_envs, gui=False)
 
     if resume:
         print(f"[INFO] Resuming from checkpoint: {resume}")
@@ -53,6 +67,9 @@ def train_single(total_timesteps: int, aux_coef: float, gui: bool = False, resum
         model.lambda_schedule = lambda_schedule
         model.lambda_warmup_steps = lambda_warmup_steps
         model.total_timesteps = total_timesteps
+        model.aux_loss_coef_min = lambda_min
+        model.freeze_feature_steps = freeze_feature_steps
+        model.ent_coef = ent_coef  # Ensure entropy bonus floor
         if learning_rate is not None:
             print(f"[INFO] Overriding learning rate to {learning_rate}")
             model.learning_rate = learning_rate
@@ -60,14 +77,16 @@ def train_single(total_timesteps: int, aux_coef: float, gui: bool = False, resum
         model = IntentPPO(
             env=env,
             aux_loss_coef=aux_coef,
+            aux_loss_coef_min=lambda_min,
             learning_rate=learning_rate if learning_rate is not None else 3e-4,
-            use_balanced_loss=False,
-            n_steps=4096,
+            ent_coef=ent_coef,
+            use_balanced_loss=balanced_loss,
+            n_steps=2048,
             batch_size=128,
             n_epochs=10,
             gamma=0.99,
             gae_lambda=0.95,
-            clip_range=0.2,
+            clip_range=clip_range,
             verbose=1,
             tensorboard_log="runs/ppo_intent/",
             policy_kwargs=dict(
@@ -75,6 +94,7 @@ def train_single(total_timesteps: int, aux_coef: float, gui: bool = False, resum
             ),
             lambda_schedule=lambda_schedule,
             lambda_warmup_steps=lambda_warmup_steps,
+            freeze_feature_steps=freeze_feature_steps,
             total_timesteps=total_timesteps,
         )
 
@@ -135,8 +155,13 @@ if __name__ == "__main__":
     parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint to resume training from")
     parser.add_argument("--balanced-loss", action="store_true", help="Enable balanced class weights for aux loss")
     parser.add_argument("--learning-rate", type=float, default=None, help="Override learning rate for resumed or new model")
-    parser.add_argument("--lambda-schedule", type=str, default="constant", choices=["constant", "cosine", "linear"], help="Lambda scheduler type")
+    parser.add_argument("--lambda-schedule", type=str, default="constant", choices=["constant", "cosine", "linear", "step"], help="Lambda scheduler type")
+    parser.add_argument("--lambda-min", type=float, default=0.0, help="Minimum lambda value when using a schedule (allows ramp from >0)")
     parser.add_argument("--lambda-warmup-steps", type=int, default=0, help="Number of steps to ramp lambda from 0 to max")
+    parser.add_argument("--freeze-feature-steps", type=int, default=0, help="Freeze shared feature layers for the first N timesteps")
+    parser.add_argument("--clip-range", type=float, default=0.2, help="PPO clip range")
+    parser.add_argument("--n-envs", type=int, default=8, help="Number of parallel envs (VecEnv)")
+    parser.add_argument("--ent-coef", type=float, default=0.01, help="Entropy bonus coefficient (exploration)")
     args = parser.parse_args()
 
     if args.sweep:
@@ -150,4 +175,10 @@ if __name__ == "__main__":
             learning_rate=args.learning_rate,
             lambda_schedule=args.lambda_schedule,
             lambda_warmup_steps=args.lambda_warmup_steps,
+            lambda_min=args.lambda_min,
+            freeze_feature_steps=args.freeze_feature_steps,
+            n_envs=args.n_envs,
+            ent_coef=args.ent_coef,
+            clip_range=args.clip_range,
+            balanced_loss=args.balanced_loss,
         ) 

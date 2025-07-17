@@ -1,0 +1,47 @@
+{
+  "env": "<class 'uav_intent_rl.envs.DogfightMultiAgentEnv.DogfightMultiAgentEnv'>",
+  "framework": "torch",
+  "enable_rl_module_and_learner": false,
+  "enable_env_runner_and_connector_v2": false,
+  "gamma": 0.99,
+  "lr": 0.0003,
+  "clip_param": 0.2,
+  "train_batch_size": 2000,
+  "sgd_minibatch_size": 64,
+  "num_sgd_iter": 5,
+  "model": {
+    "custom_model": "intent_ppo_model",
+    "fcnet_hiddens": [
+      256,
+      256
+    ],
+    "custom_model_config": {
+      "opp_loss_weight": 2.0,
+      "opp_action_buckets": 5
+    }
+  },
+  "multiagent": {
+    "policies": {
+      "blue": [
+        null,
+        null,
+        null,
+        {
+          "opp_loss_weight": 2.0
+        }
+      ],
+      "red": [
+        null,
+        null,
+        null,
+        {
+          "opp_loss_weight": 2.0
+        }
+      ]
+    },
+    "policy_mapping_fn": "<function create_simple_config.<locals>.<lambda> at 0x0000020F8AFE3550>"
+  },
+  "num_workers": 1,
+  "num_envs_per_env_runner": 1,
+  "log_level": "INFO"
+}

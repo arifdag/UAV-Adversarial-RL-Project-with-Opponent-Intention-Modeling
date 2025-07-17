@@ -1,0 +1,25 @@
+Failure # 1 (occurred at 2025-07-11_19-40-19)
+The actor died because of an error raised in its creation task, [36mray::IntentPPO.__init__()[39m (pid=26824, ip=127.0.0.1, actor_id=5e41b041cb9af09f3e205f9101000000, repr=IntentPPO)
+  File "python\\ray\\_raylet.pyx", line 1897, in ray._raylet.execute_task
+  File "python\\ray\\_raylet.pyx", line 1837, in ray._raylet.execute_task.function_executor
+  File "C:\Users\rockw\Downloads\Kodlama\gym-pybullet-drones\.venv\lib\site-packages\ray\_private\function_manager.py", line 689, in actor_method_executor
+    return method(__ray_actor, *args, **kwargs)
+  File "C:\Users\rockw\Downloads\Kodlama\gym-pybullet-drones\.venv\lib\site-packages\ray\util\tracing\tracing_helper.py", line 463, in _resume_span
+    return method(self, *_args, **_kwargs)
+  File "C:\Users\rockw\Downloads\Kodlama\UAV-Adversarial\uav_intent_rl\examples\train_ppo_intent.py", line 205, in __init__
+    super().__init__(config, env, logger_creator, **kwargs)
+  File "C:\Users\rockw\Downloads\Kodlama\gym-pybullet-drones\.venv\lib\site-packages\ray\rllib\algorithms\algorithm.py", line 536, in __init__
+    super().__init__(
+  File "C:\Users\rockw\Downloads\Kodlama\gym-pybullet-drones\.venv\lib\site-packages\ray\tune\trainable\trainable.py", line 157, in __init__
+    self.setup(copy.deepcopy(self.config))
+  File "C:\Users\rockw\Downloads\Kodlama\gym-pybullet-drones\.venv\lib\site-packages\ray\util\tracing\tracing_helper.py", line 463, in _resume_span
+    return method(self, *_args, **_kwargs)
+  File "C:\Users\rockw\Downloads\Kodlama\gym-pybullet-drones\.venv\lib\site-packages\ray\rllib\algorithms\algorithm.py", line 644, in setup
+    self.env_runner_group = EnvRunnerGroup(
+  File "C:\Users\rockw\Downloads\Kodlama\gym-pybullet-drones\.venv\lib\site-packages\ray\rllib\env\env_runner_group.py", line 198, in __init__
+    self._setup(
+  File "C:\Users\rockw\Downloads\Kodlama\gym-pybullet-drones\.venv\lib\site-packages\ray\rllib\env\env_runner_group.py", line 286, in _setup
+    spaces = self.get_spaces()
+  File "C:\Users\rockw\Downloads\Kodlama\gym-pybullet-drones\.venv\lib\site-packages\ray\rllib\env\env_runner_group.py", line 314, in get_spaces
+    spaces = self.foreach_env_runner(
+IndexError: list index out of range
