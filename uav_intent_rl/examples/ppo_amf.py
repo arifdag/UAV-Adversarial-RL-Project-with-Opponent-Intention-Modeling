@@ -47,6 +47,10 @@ def train_from_config(cfg: Dict[str, Any], gui: bool = False):
     n_envs = int(cfg.get("n_envs", 8))
 
     amf_lambda = float(cfg.get("amf_lambda", 0.5))
+    lambda_schedule = str(cfg.get("lambda_schedule", "constant"))
+    lambda_warmup = int(cfg.get("lambda_warmup_steps", 0))
+    freeze_steps = int(cfg.get("freeze_feature_steps", 0))
+    balanced_loss = bool(cfg.get("balanced_loss", False))
 
     env = _make_env(n_envs=n_envs, gui=gui)
     eval_env = _make_env(n_envs=n_envs, gui=False)
@@ -55,6 +59,10 @@ def train_from_config(cfg: Dict[str, Any], gui: bool = False):
         policy=AMFPolicy,
         env=env,
         aux_loss_coef=amf_lambda,
+        lambda_schedule=lambda_schedule,
+        lambda_warmup_steps=lambda_warmup,
+        freeze_feature_steps=freeze_steps,
+        use_balanced_loss=balanced_loss,
         learning_rate=float(cfg.get("learning_rate", 3e-4)),
         n_steps=int(cfg.get("n_steps", 2048)),
         batch_size=int(cfg.get("batch_size", 64)),

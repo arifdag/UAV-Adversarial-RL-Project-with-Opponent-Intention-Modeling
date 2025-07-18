@@ -55,8 +55,10 @@ class ScriptedRedPolicy:  # noqa: D101 – simple callable helper
 
         # Relative position (blue − red)
         rel_pos = state_blue[0:3] - state_red[0:3]
+        # Add noise to make the opponent less predictable
+        rel_pos += np.random.normal(loc=0.0, scale=0.1, size=3)
         # Maintain fixed target altitude
-        rel_pos[2] = self.target_alt - state_red[2]
+        rel_pos[2] = self.target_alt - state_red[2] + np.random.normal(loc=0.0, scale=0.05)
 
         # Direction – normalise to unit vector (avoid division by zero)
         norm = np.linalg.norm(rel_pos)

@@ -2,16 +2,21 @@ algorithm: IntentPPO
 policy: AMFPolicy
 total_timesteps: 3000000
 n_envs: 8
-amf_lambda: 0.1  # weight for auxiliary CE loss (λ)
+amf_lambda: 0.2            # final λ after warm-up
+lambda_schedule: linear    # ramp λ from 0→amf_lambda
+lambda_warmup_steps: 500000
+freeze_feature_steps: 200000
+balanced_loss: true
 log_h_opp: true
 checkpoint_freq: 100_000
 eval_freq: 20_000
 gamma: 0.99
-learning_rate: 3e-4
-n_steps: 2048
-batch_size: 64
+learning_rate: 1e-4
+n_steps: 4096
+batch_size: 256
 gae_lambda: 0.95
 ent_coef: 0.01
-clip_range: 0.2
+clip_range: 0.1
+n_epochs: 6
 vf_coef: 0.5
 max_grad_norm: 0.5 
