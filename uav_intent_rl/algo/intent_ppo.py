@@ -45,7 +45,8 @@ def bucketize_red_action(action: np.ndarray) -> int:
     4 – SE
     """
     x, y = float(action[0]), float(action[1])
-    if abs(x) <= 0.3 and abs(y) <= 0.3:
+    if (x**2 + y**2) <= 0.3**2:
+        # truly "no‐motion"
         return 0
     if x >= 0 and y >= 0:
         return 1  # NE
@@ -200,13 +201,21 @@ class IntentPPO(PPO):
             self.policy.reset_noise(env.num_envs)
         callback.on_rollout_start()
 
+        # For recurrent policies
+        state = None
+        episode_starts = self._last_episode_starts if hasattr(self, '_last_episode_starts') else None
+
         while n_steps < n_rollout_steps:
             if self.use_sde and self.sde_sample_freq > 0 and n_steps % self.sde_sample_freq == 0:
                 self.policy.reset_noise(env.num_envs)
 
             with th.no_grad():
                 obs_tensor = obs_as_tensor(self._last_obs, self.device)
-                actions, values, log_probs = self.policy(obs_tensor)
+                out = self.policy(obs_tensor, state=state, episode_starts=episode_starts)
+                if len(out) == 4:
+                    actions, values, log_probs, state = out
+                else:
+                    actions, values, log_probs = out
             actions_np = actions.cpu().numpy()
 
             clipped_actions = actions_np
@@ -256,6 +265,7 @@ class IntentPPO(PPO):
             )
             self._last_obs = new_obs
             self._last_episode_starts = dones
+            episode_starts = dones
 
         with th.no_grad():
             values = self.policy.predict_values(obs_as_tensor(new_obs, self.device))
@@ -305,9 +315,12 @@ class IntentPPO(PPO):
                 if isinstance(self.action_space, spaces.Discrete):
                     actions = rollout_data.actions.long().flatten()
 
-                values, log_prob, entropy = self.policy.evaluate_actions(
-                    rollout_data.observations, actions
-                )
+                # Evaluate actions (handle recurrent and non-recurrent)
+                out = self.policy.evaluate_actions(rollout_data.observations, actions)
+                if len(out) == 4:
+                    values, log_prob, entropy, _ = out
+                else:
+                    values, log_prob, entropy = out
                 values = values.flatten()
                 advantages = rollout_data.advantages
                 if self.normalize_advantage and len(advantages) > 1:

@@ -18,6 +18,7 @@ from stable_baselines3.common.callbacks import (
 import io
 from contextlib import redirect_stdout
 import sys
+from stable_baselines3.common.vec_env import VecNormalize
 
 from uav_intent_rl.envs import DogfightAviary
 from uav_intent_rl.policies import ScriptedRedPolicy
@@ -260,9 +261,11 @@ def run(
     # ------------------------------------------------------------------
     n_envs = int(cfg.get("n_envs", 1))
     train_env = make_vec_env(_make_single_env(gui=False), n_envs=n_envs)
+    train_env = VecNormalize(train_env, gamma=0.99, norm_reward=True, clip_reward=10.0)
 
     # Separate single-env for periodic evaluation & best-model tracking
     eval_env = make_vec_env(_make_single_env(gui=False), n_envs=1)
+    eval_env = VecNormalize(eval_env, gamma=0.99, norm_reward=True, clip_reward=10.0)
 
     # ------------------------------------------------------------------
     # Instantiate PPO – either fresh or resumed from checkpoint

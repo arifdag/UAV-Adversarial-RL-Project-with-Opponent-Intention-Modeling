@@ -42,14 +42,11 @@ class DogfightAviary(BaseRLAviary):
 
     # Episode duration in seconds before *truncation*
     EPISODE_LEN_SEC: int = 15
-    # Damage radius (m) within which a *hit* is registered. 0.3 m proved too
-    # unforgiving for the learned policy; drones very rarely close that much
-    # distance.  A looser 0.8 m still requires close-in manoeuvring but allows
-    # the agent to actually land hits during training.
-    DEF_DMG_RADIUS: float = 0.8
+    # Damage radius (m) within which a *hit* is registered. Increased for easier hits early on.
+    DEF_DMG_RADIUS: float = 1.5
     # Half-angle (radians) of the shooter's field-of-view cone used to validate
-    # whether the opponent is "in front". 60° total FOV (±30° from heading)
-    FOV_HALF_ANGLE: float = np.deg2rad(30.0)
+    # whether the opponent is "in front". Increased for easier hits early on.
+    FOV_HALF_ANGLE: float = np.deg2rad(45.0)
 
     # ===== Additional shaping parameters =====
     # Radius (m) within which we start giving proximity bonuses. Should be large
@@ -57,9 +54,9 @@ class DogfightAviary(BaseRLAviary):
     POS_ADV_MAX_DIST: float = 2.0
     # Dense reward multiplier for positional advantage. Tuned empirically –
     # small enough to not overshadow hit reward (+1).
-    POS_ADV_COEF: float = 0.25
+    POS_ADV_COEF: float = 0.3
     # Dense reward multiplier for *being targeted* by the opponent (penalty).
-    NEG_ADV_COEF: float = 0.1
+    NEG_ADV_COEF: float = 0.0
 
     # ===== Distance-keeping shaping =====
     # Below DIST_TARGET the agent is considered "close enough" – further
@@ -69,7 +66,7 @@ class DogfightAviary(BaseRLAviary):
     # linearly to zero.
     DIST_FAR: float = 5.0  # m
     # Scale of the dense reward encouraging the blue drone to close in.
-    DIST_COEF: float = 0.05
+    DIST_COEF: float = 0.2
 
     # ---------------------------------------------------------------------
     # Construction helpers
@@ -324,28 +321,32 @@ class DogfightAviary(BaseRLAviary):
     # ------------------------------------------------------------------
 
     def _computeReward(self) -> float:  # type: ignore[override]
-        """Reward function with shaping.
-
-        Reward components:
-
-        * **Hit reward**: +1 for blue hitting red, −1 for the converse.
-        * **Positional advantage**: small dense reward encouraging the blue
-          drone to get *in front & close* to the opponent.
-        * **Living penalty**: −0.03 per step to incentivise faster kills.
         """
-
-        hit_reward = self._calc_hits()
-        # Terminal bonus: big reward for downing the opponent, penalty if blue is down
-        if self._red_down():
-            hit_reward += 8.0  # bigger terminal reward encourages decisive kills
-        elif self._blue_down():
-            hit_reward -= 8.0
-
-        pos_reward = self._calc_positional_advantage()
-        dist_bonus = self._calc_distance_bonus()
+        Updated reward structure:
+        - +15.0 for downing the opponent (blue wins)
+        - -15.0 for being downed (blue loses)
+        - +1/-1 for a hit (as before)
+        - -0.01 per step (living penalty)
+        - -5.0 for a draw (timeout)
+        - Dense shaping (positional, distance)
+        """
         living_penalty = -0.01
+        draw_penalty   = -5.0
+        hit_reward     = self._calc_hits()          # ±1
 
-        return float(hit_reward + pos_reward + dist_bonus + living_penalty)
+        if self._red_down():
+            hit_reward += 15.0
+        elif self._blue_down():
+            hit_reward -= 15.0
+
+        # dense shaping
+        pos_reward  = self._calc_positional_advantage()
+        dist_bonus  = self._calc_distance_bonus()
+
+        total = hit_reward + pos_reward + dist_bonus + living_penalty
+        if self._computeTruncated() and not self._computeTerminated():
+            total += draw_penalty
+        return float(total)
 
     def _computeTerminated(self) -> bool:  # type: ignore[override]
         """Episode ends when either drone is downed."""

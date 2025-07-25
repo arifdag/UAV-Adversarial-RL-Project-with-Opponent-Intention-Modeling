@@ -1,0 +1,72 @@
+# PPO-AMF with dense-shaping reward                 (2025-07-23)
+algorithm: AMF
+policy: AMFPolicy
+
+# ------------------------------------------------------------------
+# Training budget
+# ------------------------------------------------------------------
+total_timesteps: 6_000_000      # ≈24 h on 8 envs
+n_envs: 8
+
+# ------------------------------------------------------------------
+# Curriculum-learning
+# ------------------------------------------------------------------
+curriculum_schedule: performance
+curriculum_warmup_steps: 300_000     # linear ramp 0→0.4
+max_warmup_difficulty: 0.4
+curriculum_threshold: 0.55           # step once win-rate > 55 %
+curriculum_step_size: 0.10           # gentler than 0.2
+#
+# → result: difficulty reaches 1.0 only after several wins at each tier
+
+# ------------------------------------------------------------------
+# AMF auxiliary head
+# ------------------------------------------------------------------
+amf_lambda: 0.30
+lambda_schedule: linear
+lambda_warmup_steps: 500_000         # let policy focus on game reward first
+
+# ------------------------------------------------------------------
+# PPO core hyper-parameters
+# ------------------------------------------------------------------
+learning_rate: 5e-5          #  ↓ from 1e-4
+lr_schedule: constant        #  no warm-down yet
+clip_range: 0.10             #  ↓ from 0.20
+clip_range_vf: 0.10          #  critic clip as well
+max_grad_norm: 0.4           #  a bit tighter
+vf_coef: 1.0                 #  give critic full weight
+ent_coef: 0.01               #  more exploration
+target_kl: 0.02              #  abort update if KL explodes (SB3 arg)
+# Optional: decay amf_lambda so the auxiliary loss can’t dominate when the main net is still stabilising:
+amf_lambda: 0.3
+lambda_schedule: linear
+lambda_warmup_steps: 1_000_000   # after the critic has settled
+
+# ------------------------------------------------------------------
+# CMA exploration (unchanged)
+# ------------------------------------------------------------------
+cma_learning_rate: 0.05
+cma_memory_size: 200
+cma_min_variance: 0.02
+cma_max_variance: 1.0
+cma_variance_decay: 0.90
+cma_variance_expansion: 1.10
+cma_performance_threshold: 0.10
+
+# ------------------------------------------------------------------
+# Logging / evaluation
+# ------------------------------------------------------------------
+eval_freq: 20_000
+eval_episodes: 30
+checkpoint_freq: 100_000
+tensorboard_log: runs/ppo_amf_dense/
+
+# ------------------------------------------------------------------
+# Environment (PyBullet, headless)
+# ------------------------------------------------------------------
+env_kwargs:
+  gui: false
+  record: false
+  physics: "PYB"
+  pyb_freq: 240
+  ctrl_freq: 30

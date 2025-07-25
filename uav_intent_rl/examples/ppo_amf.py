@@ -74,7 +74,11 @@ def train_from_config(cfg: Dict[str, Any], gui: bool = False):
         max_grad_norm=float(cfg.get("max_grad_norm", 0.5)),
         tensorboard_log="runs/ppo_amf/",
         policy_kwargs=dict(
-            net_arch=[dict(pi=[256, 256], vf=[256, 256])],
+            net_arch=[dict(pi=[512, 256, 128], vf=[512, 256, 128])],
+            use_lstm=True,
+            lstm_hidden_size=128,
+            lstm_num_layers=1,
+            lstm_type="lstm",
         ),
         verbose=1,
     )
