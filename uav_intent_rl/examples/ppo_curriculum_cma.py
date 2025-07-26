@@ -220,21 +220,26 @@ class IntentAccuracyCallback(BaseCallback):
 # Add PerformanceCurriculumCallback for true performance-based curriculum
 class PerformanceCurriculumCallback(BaseCallback):
     """Hybrid curriculum: linear ramp during warmup, then performance-based stepping."""
-    def __init__(self, threshold: float, step_size: float, warmup_steps: int, max_warmup_difficulty: float = 0.3, verbose: int = 0):
+    def __init__(self, threshold: float, step_size: float, warmup_steps: int, 
+                 max_warmup_difficulty: float = 0.3, 
+                 stop_curriculum_at: float = 1.0,
+                 min_steps_between_increases: int = 0,
+                 verbose: int = 0):
         super().__init__(verbose)
         self.threshold = threshold
         self.step_size = step_size
         self.warmup_steps = warmup_steps
         self.max_warmup_difficulty = max_warmup_difficulty
+        self.stop_curriculum_at = stop_curriculum_at  # NEW
+        self.min_steps_between_increases = min_steps_between_increases  # NEW
         self.current_difficulty = 0.0
         self._after_warmup = False
         self.performance_based = 0
-        self._last_win_rate = None  # Track last win rate to detect changes
-        self._increased_this_cycle = False  # Track if we increased difficulty this evaluation cycle
+        self._last_win_rate = None
+        self._increased_this_cycle = False
+        self._last_increase_timestep = 0  # NEW
         if self.verbose > 0:
-            print(f"[PERFORMANCE CURRICULUM] Initialized with step_size={self.step_size:.3f}, threshold={self.threshold:.3f}, warmup_steps={self.warmup_steps}, max_warmup_difficulty={self.max_warmup_difficulty:.3f}")
-            print(f"[PERFORMANCE CURRICULUM] DEBUG: step_size type={type(self.step_size)}, value={self.step_size}")
-            print(f"[PERFORMANCE CURRICULUM] DEBUG: All parameters - step_size={self.step_size}, threshold={self.threshold}, warmup_steps={self.warmup_steps}, max_warmup_difficulty={self.max_warmup_difficulty}")
+            print(f"[PERFORMANCE CURRICULUM] Initialized with step_size={self.step_size:.3f}, threshold={self.threshold:.3f}, warmup_steps={self.warmup_steps}, max_warmup_difficulty={self.max_warmup_difficulty:.3f}, stop_curriculum_at={self.stop_curriculum_at}, min_steps_between_increases={self.min_steps_between_increases}")
 
     def _on_step(self) -> bool:
         if self.num_timesteps < self.warmup_steps:
@@ -246,65 +251,42 @@ class PerformanceCurriculumCallback(BaseCallback):
                 print(f"[PERFORMANCE CURRICULUM] Warmup phase: t={self.num_timesteps}, frac={frac:.3f}, difficulty={self.current_difficulty:.3f}")
         else:
             if not self._after_warmup:
-                # Snap to max_warmup_difficulty at end of warmup
                 self.current_difficulty = self.max_warmup_difficulty
                 self._after_warmup = True
                 if self.verbose > 0:
                     print(f"[PERFORMANCE CURRICULUM] Warmup complete. Starting performance-based at difficulty={self.current_difficulty:.3f}")
-            
             # Performance-based stepping
             win_rate = None
             if hasattr(self.logger, 'name_to_value') and "eval/win_rate" in self.logger.name_to_value:
                 win_rate = self.logger.name_to_value["eval/win_rate"]
-            
             # Check if win rate has changed (new evaluation cycle)
             if win_rate is not None and win_rate != self._last_win_rate:
-                # Reset the flag for new evaluation cycle
                 self._increased_this_cycle = False
                 self._last_win_rate = win_rate
                 if self.verbose > 0:
                     print(f"[PERFORMANCE CURRICULUM] New win rate evaluation: {win_rate:.3f}")
-            
-            if win_rate is not None and win_rate >= self.threshold and self.current_difficulty < 1.0 and not self._increased_this_cycle:
+            # Check if enough time has passed since last increase
+            steps_since_last = self.num_timesteps - self._last_increase_timestep
+            if (win_rate is not None and 
+                win_rate >= self.threshold and 
+                self.current_difficulty < self.stop_curriculum_at and  # RESPECT CEILING
+                not self._increased_this_cycle and
+                steps_since_last >= self.min_steps_between_increases):  # MIN WAIT TIME
                 prev_diff = self.current_difficulty
-                # CRITICAL DEBUG: Log the exact values when win rate threshold is met
-                print(f"[CRITICAL DEBUG] Win rate {win_rate:.3f} >= {self.threshold}, current_difficulty={self.current_difficulty:.3f}, step_size={self.step_size:.3f}, would increase to {self.current_difficulty + self.step_size:.3f}")
-                
-                # Only increase if we won't jump too much
-                if self.current_difficulty + self.step_size <= 1.0:
-                    self.current_difficulty = self.current_difficulty + self.step_size
+                # Only increase if we won't exceed stop_curriculum_at
+                next_diff = min(self.current_difficulty + self.step_size, self.stop_curriculum_at)
+                if next_diff > self.current_difficulty:
+                    self.current_difficulty = next_diff
                     self.performance_based = 1
-                    self._increased_this_cycle = True  # Mark that we increased this cycle
+                    self._increased_this_cycle = True
+                    self._last_increase_timestep = self.num_timesteps  # Track when we increased
                     if self.verbose > 0:
-                        print(f"[PERFORMANCE CURRICULUM] Win rate {win_rate:.3f} >= {self.threshold}, increasing difficulty from {prev_diff:.3f} to {self.current_difficulty:.3f} (step_size={self.step_size:.3f})")
-                else:
-                    # Cap at 1.0 but don't jump
-                    self.current_difficulty = 1.0
-                    self.performance_based = 1
-                    self._increased_this_cycle = True  # Mark that we increased this cycle
-                    if self.verbose > 0:
-                        print(f"[PERFORMANCE CURRICULUM] Win rate {win_rate:.3f} >= {self.threshold}, capping difficulty at 1.0 (was {prev_diff:.3f})")
-            elif win_rate is not None and win_rate >= self.threshold and self._increased_this_cycle:
-                # Win rate is still above threshold, but we already increased this cycle
-                self.performance_based = 0
-                if self.verbose > 0:
-                    print(f"[PERFORMANCE CURRICULUM] Win rate {win_rate:.3f} >= {self.threshold}, but already increased this cycle, holding difficulty at {self.current_difficulty:.3f}")
-            else:
-                self.performance_based = 0
-                if self.verbose > 0 and win_rate is not None:
-                    print(f"[PERFORMANCE CURRICULUM] Win rate {win_rate:.3f} < {self.threshold}, holding difficulty at {self.current_difficulty:.3f}")
-            
-            # Debug: Log current state every 1000 steps
-            if self.num_timesteps % 1000 == 0:
-                win_rate_str = f"{win_rate:.3f}" if win_rate is not None else "None"
-                print(f"[DEBUG] Step {self.num_timesteps}: difficulty={self.current_difficulty:.3f}, win_rate={win_rate_str}, threshold={self.threshold:.3f}, step_size={self.step_size:.3f}")
-        
-        # Update all environments with the new difficulty
+                        print(f"[PERFORMANCE CURRICULUM] Win rate {win_rate:.3f} >= {self.threshold}, increasing difficulty from {prev_diff:.3f} to {self.current_difficulty:.3f}")
+        # Update all environments
         if hasattr(self.training_env, 'envs'):
             for e in self.training_env.envs:
                 if hasattr(e, '_update_opponent'):
                     e._update_opponent(self.current_difficulty, force_update=True)
-        
         # Log curriculum information
         self.logger.record("curriculum/difficulty", self.current_difficulty)
         self.logger.record("curriculum/performance_based", self.performance_based)
@@ -381,6 +363,8 @@ def train_ppo_curriculum_cma(
     performance_warmup_steps: int = 10000,
     checkpoint_freq: int = 100_000,
     max_warmup_difficulty: float = 0.3,
+    stop_curriculum_at: float = 1.0,  # NEW
+    min_steps_between_increases: int = 0,  # NEW
 ) -> PPOCMA:
     """Train PPO-CMA with curriculum learning."""
 
@@ -418,6 +402,8 @@ def train_ppo_curriculum_cma(
             step_size=performance_step_size,
             warmup_steps=performance_warmup_steps,
             max_warmup_difficulty=max_warmup_difficulty,  # Added max_warmup_difficulty
+            stop_curriculum_at=stop_curriculum_at,  # NEW
+            min_steps_between_increases=min_steps_between_increases,  # NEW
             verbose=verbose,
         )
     else:
@@ -587,6 +573,12 @@ def main():
     parser.add_argument("--max-warmup-difficulty", type=float, default=0.3,
                        help="Maximum difficulty during warmup phase")
     
+    # New curriculum control arguments
+    parser.add_argument("--stop-curriculum-at", type=float, default=0.9,
+                       help="Maximum curriculum difficulty (stop here)")
+    parser.add_argument("--min-steps-between-increases", type=int, default=60000,
+                       help="Minimum timesteps between difficulty increases")
+    
     # CMA parameters
     parser.add_argument("--cma-learning-rate", type=float, default=0.1,
                        help="CMA learning rate")
@@ -645,6 +637,8 @@ def main():
         performance_step_size=args.curriculum_step_size,
         performance_warmup_steps=args.curriculum_warmup_steps,
         max_warmup_difficulty=args.max_warmup_difficulty, # Pass max_warmup_difficulty
+        stop_curriculum_at=args.stop_curriculum_at,
+        min_steps_between_increases=args.min_steps_between_increases,
     )
     
     # Evaluate the model

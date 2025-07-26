@@ -1,50 +1,41 @@
-# PPO-AMF with dense-shaping reward                 (2025-07-23)
+# PPO-AMF with dense-shaping reward and curriculum fixes
 algorithm: AMF
 policy: AMFPolicy
 
-# ------------------------------------------------------------------
 # Training budget
-# ------------------------------------------------------------------
-total_timesteps: 6_000_000      # ≈24 h on 8 envs
+total_timesteps: 6_000_000
 n_envs: 8
 
-# ------------------------------------------------------------------
-# Curriculum-learning
-# ------------------------------------------------------------------
+# Curriculum-learning - SLOW DOWN THE PROGRESSION
 curriculum_schedule: performance
-curriculum_warmup_steps: 300_000     # linear ramp 0→0.4
-max_warmup_difficulty: 0.4
-curriculum_threshold: 0.55           # step once win-rate > 55 %
-curriculum_step_size: 0.10           # gentler than 0.2
-#
-# → result: difficulty reaches 1.0 only after several wins at each tier
+curriculum_warmup_steps: 500_000       # Longer warmup
+max_warmup_difficulty: 0.3             # Start even easier (was 0.4)
+curriculum_threshold: 0.55             # Slightly lower threshold
+curriculum_step_size: 0.05             # Keep small steps
+stop_curriculum_at: 0.90
+min_steps_between_increases: 60_000
 
-# ------------------------------------------------------------------
-# AMF auxiliary head
-# ------------------------------------------------------------------
+# AMF auxiliary head - DELAY FULL WEIGHT
 amf_lambda: 0.30
 lambda_schedule: linear
-lambda_warmup_steps: 500_000         # let policy focus on game reward first
+lambda_warmup_steps: 3_000_000         # Even longer warmup
 
-# ------------------------------------------------------------------
-# PPO core hyper-parameters
-# ------------------------------------------------------------------
-learning_rate: 5e-5          #  ↓ from 1e-4
-lr_schedule: constant        #  no warm-down yet
-clip_range: 0.10             #  ↓ from 0.20
-clip_range_vf: 0.10          #  critic clip as well
-max_grad_norm: 0.4           #  a bit tighter
-vf_coef: 1.0                 #  give critic full weight
-ent_coef: 0.01               #  more exploration
-target_kl: 0.02              #  abort update if KL explodes (SB3 arg)
-# Optional: decay amf_lambda so the auxiliary loss can’t dominate when the main net is still stabilising:
-amf_lambda: 0.3
-lambda_schedule: linear
-lambda_warmup_steps: 1_000_000   # after the critic has settled
+# PPO core hyper-parameters - MORE EXPLORATION ROOM
+learning_rate: 1e-4                    # Higher learning rate
+lr_schedule: constant
+clip_range: 0.2                        # Increase from 0.15
+clip_range_vf: null                    # Remove value function clipping
+max_grad_norm: 0.6
+vf_coef: 1.0
+ent_coef: 0.05                         # Much higher (was 0.02)
+ent_coef_schedule: linear              # Add entropy annealing
+ent_coef_min: 0.01                     # End value after annealing
+ent_coef_anneal_steps: 4_000_000       # Anneal over most of training
+batch_size: 32                         # Smaller batches for more variance
+n_epochs: 5                            # Fewer epochs per update
+target_kl: null                        # Remove KL constraint temporarily
 
-# ------------------------------------------------------------------
-# CMA exploration (unchanged)
-# ------------------------------------------------------------------
+# CMA exploration
 cma_learning_rate: 0.05
 cma_memory_size: 200
 cma_min_variance: 0.02
@@ -53,17 +44,13 @@ cma_variance_decay: 0.90
 cma_variance_expansion: 1.10
 cma_performance_threshold: 0.10
 
-# ------------------------------------------------------------------
-# Logging / evaluation
-# ------------------------------------------------------------------
+# Logging / evaluation - MORE EPISODES FOR STABLE METRICS
 eval_freq: 20_000
-eval_episodes: 30
+eval_episodes: 80
 checkpoint_freq: 100_000
 tensorboard_log: runs/ppo_amf_dense/
 
-# ------------------------------------------------------------------
-# Environment (PyBullet, headless)
-# ------------------------------------------------------------------
+# Environment
 env_kwargs:
   gui: false
   record: false

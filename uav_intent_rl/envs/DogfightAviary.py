@@ -55,8 +55,8 @@ class DogfightAviary(BaseRLAviary):
     # Dense reward multiplier for positional advantage. Tuned empirically –
     # small enough to not overshadow hit reward (+1).
     POS_ADV_COEF: float = 0.3
-    # Dense reward multiplier for *being targeted* by the opponent (penalty).
-    NEG_ADV_COEF: float = 0.0
+    # Dense reward multiplier for being targeted (now symmetric)
+    NEG_ADV_COEF: float = 0.3  # Not used anymore, using POS_ADV_COEF symmetrically
 
     # ===== Distance-keeping shaping =====
     # Below DIST_TARGET the agent is considered "close enough" – further
@@ -169,14 +169,7 @@ class DogfightAviary(BaseRLAviary):
     # ------------------------------------------------------------------
 
     def _calc_positional_advantage(self) -> float:
-        """Return a shaped reward reflecting angular & distance advantage.
-
-        The idea is to encourage *blue* to manoeuvre behind/in front of the
-        opponent (within field-of-view) **and** close the distance. The reward
-        is continuous to provide gradient-like feedback and symmetric so that
-        giving the red drone positional advantage yields a penalty of equal
-        magnitude.
-        """
+        """Return a shaped reward reflecting angular & distance advantage."""
 
         # Retrieve current states
         state_blue = self._getDroneStateVector(0)
@@ -226,9 +219,13 @@ class DogfightAviary(BaseRLAviary):
         # Distance modifier: only reward if within POS_ADV_MAX_DIST
         dist_mod = max(0.0, (self.POS_ADV_MAX_DIST - dist) / self.POS_ADV_MAX_DIST)
 
-        # Final shaped reward (positive for blue advantage, negative if red has it)
-        shaped = self.POS_ADV_COEF * blue_score * dist_mod - self.NEG_ADV_COEF * red_score * dist_mod
+        # Final shaped reward - NOW WITH NEGATIVE PENALTY
+        # Positive for blue advantage
+        pos_advantage = self.POS_ADV_COEF * blue_score * dist_mod
+        # Negative when red has advantage (increased from 0.0)
+        neg_advantage = -self.POS_ADV_COEF * red_score * dist_mod  # Symmetric penalty
 
+        shaped = pos_advantage + neg_advantage
         return shaped
 
     def _calc_hits(self) -> float:
