@@ -7,12 +7,12 @@ The test verifies that the environment initialises the two drones with:
 
 import numpy as np
 
-from uav_intent_rl.envs import DogfightAviary
+from uav_intent_rl.envs import MultiDroneDogfightAviary
 
 
 def test_random_spawn_distribution():
     """Spawn distance and yaw values lie in the expected ranges and vary."""
-    env = DogfightAviary(gui=False)
+    env = MultiDroneDogfightAviary(gui=False)
 
     distances = []
     yaws = []

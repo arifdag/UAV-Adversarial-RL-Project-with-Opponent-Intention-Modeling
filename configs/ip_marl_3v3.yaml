@@ -1,0 +1,125 @@
+# IP MARL 3v3 Configuration
+# Intention Propagation Multi-Agent Reinforcement Learning for 3v3 drone combat
+
+# Training parameters
+total_timesteps: 2000000
+n_envs: 8
+eval_freq: 2000
+checkpoint_freq: 100000
+save_path: "models/ip_marl_3v3"
+tensorboard_log: "runs/ip_marl_3v3"
+seed: 42
+
+# Environment configuration
+env_config:
+  gui: false
+  record: false
+  pyb_freq: 240
+  ctrl_freq: 30
+  drone_model: "cf2x"
+  obs: "kin"
+  act: "vel"
+
+# IP MARL specific parameters
+intention_dim: 8
+intention_propagation: true
+intention_loss_coef: 0.1
+use_centralized_critic: true
+state_shape: [6, 12]  # 6 agents, 12 observation dimensions each
+
+# Policy network configuration
+policy_kwargs:
+  n_agents: 6  # 3 blue + 3 red
+  use_centralized_critic: true
+  state_shape: [6, 12]  # 6 agents, 12 observation dimensions each
+  hidden_dim: 256
+  intention_dim: 8
+  intention_propagation: true
+  net_arch:
+    pi: [256, 256]  # Policy network architecture
+    vf: [256, 256]  # Value network architecture
+
+# Model training configuration
+model_kwargs:
+  learning_rate: 3.0e-4
+  n_steps: 2048
+  batch_size: 256
+  n_epochs: 10
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  clip_range_vf: null
+  ent_coef: 0.01
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  use_sde: false
+  sde_sample_freq: -1
+  target_kl: null
+  verbose: 1
+  device: "auto"
+
+# Intention modeling parameters
+intention_config:
+  intention_dim: 8
+  intention_propagation: true
+  intention_loss_coef: 0.1
+  intention_attention_heads: 4
+  intention_hidden_dim: 128
+  intention_dropout: 0.1
+
+# Team coordination parameters
+team_config:
+  coordination_weight: 0.7
+  formation_bonus: 0.1
+  survival_bonus: 0.05
+  team_survival_bonus: 0.1
+
+# Curriculum learning (optional)
+curriculum_config:
+  enabled: false
+  phases:
+    - name: "basic_formation"
+      timesteps: 500000
+      difficulty: 0.3
+    - name: "team_coordination"
+      timesteps: 1000000
+      difficulty: 0.6
+    - name: "advanced_tactics"
+      timesteps: 2000000
+      difficulty: 1.0
+
+# Evaluation configuration
+eval_config:
+  n_eval_episodes: 10
+  deterministic: true
+  eval_metrics:
+    - "episode_rewards"
+    - "episode_lengths"
+    - "blue_wins"
+    - "red_wins"
+    - "draws"
+    - "blue_hits"
+    - "red_hits"
+    - "team_coordination"
+    - "formation_quality"
+    - "intention_accuracy"
+
+# Logging configuration
+logging_config:
+  log_interval: 1
+  tensorboard_log: "runs/ip_marl_3v3"
+  verbose: 1
+  progress_bar: true
+
+# Hardware configuration
+hardware_config:
+  device: "auto"  # "cpu", "cuda", or "auto"
+  num_threads: 4
+  use_subproc: true
+
+# Model saving configuration
+save_config:
+  save_path: "models/ip_marl_3v3"
+  checkpoint_freq: 100000
+  save_replay_buffer: false
+  save_vecnormalize: true 

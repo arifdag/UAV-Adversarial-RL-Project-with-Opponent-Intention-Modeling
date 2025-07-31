@@ -6,12 +6,12 @@ shapes and that a single environment step executes without error.
 
 import numpy as np
 
-from uav_intent_rl.envs import DogfightAviary
+from uav_intent_rl.envs import MultiDroneDogfightAviary
 
 
 def test_space_shapes():
     """The environment exposes the correct observation/action space shapes."""
-    env = DogfightAviary(gui=False)
+    env = MultiDroneDogfightAviary(gui=False)
 
     # Expected shapes: (num_drones, action_dim) & (num_drones, obs_dim)
     assert env.action_space.shape == (2, 4)
@@ -56,7 +56,7 @@ def test_hit_and_termination():
         ]
     )
 
-    env = DogfightAviary(initial_xyzs=positions, initial_rpys=rpys, gui=False)
+    env = MultiDroneDogfightAviary(initial_xyzs=positions, initial_rpys=rpys, gui=False)
 
     env.reset()
 

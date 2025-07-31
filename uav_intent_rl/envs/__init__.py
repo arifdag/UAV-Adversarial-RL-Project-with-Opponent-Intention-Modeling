@@ -1,16 +1,17 @@
-"""Custom environments for UAV adversarial RL project."""
+"""Environment modules for UAV adversarial RL."""
 
-from .DogfightAviary import DogfightAviary  # noqa: F401
-
-# DogfightMultiAgentEnv relies on Ray RLlib; guard against missing dependency
-try:
-    from .DogfightMultiAgentEnv import DogfightMultiAgentEnv  # noqa: F401
-except ModuleNotFoundError:  # pragma: no cover
-    # Gracefully degrade when RLlib is not available – users who need the
-    # multi-agent wrapper must `pip install ray[rllib]`.
-    DogfightMultiAgentEnv = None  # type: ignore[assignment]
+from .DogfightAviary import DogfightAviary
+from .DogfightMultiAgentEnv import DogfightMultiAgentEnv, default_policy_mapping_fn
+from .Dogfight3v3Aviary import Dogfight3v3Aviary
+from .Dogfight3v3MultiAgentEnv import Dogfight3v3MultiAgentEnv, default_3v3_policy_mapping_fn
 
 __all__ = [
     "DogfightAviary",
-    "DogfightMultiAgentEnv",
+    "DogfightMultiAgentEnv", 
+    "default_policy_mapping_fn",
+    "Dogfight3v3Aviary",
+    "Dogfight3v3MultiAgentEnv",
+    "Dogfight3v3MultiAgentVecEnv",
+    "make_mappo_vec_env",
+    "default_3v3_policy_mapping_fn",
 ] 
